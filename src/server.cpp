@@ -22,10 +22,17 @@ bool McpServer::start(const ServerConfig& cfg, std::string* err) {
             try {
                 return proto->handle(req);
             } catch (const std::exception& e) {
+                json::Document d(rapidjson::kObjectType);
+                auto& a = d.GetAllocator();
+                json::set(d, "jsonrpc", "2.0", a);
+                json::set(d, "id", json::Value(rapidjson::kNullType), a);
+                json::Value error = json::object();
+                json::set(error, "code", -32603, a);
+                json::set(error, "message", std::string_view(e.what()), a);
+                json::set(d, "error", std::move(error), a);
                 HttpResponse r;
                 r.status = 500;
-                r.body = std::string(R"({"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":")") +
-                         e.what() + "\"}}";
+                r.body = json::dump(d);
                 return r;
             } catch (...) {
                 HttpResponse r;
