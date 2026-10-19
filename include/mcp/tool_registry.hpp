@@ -54,8 +54,12 @@ struct ToolSpec {
 
 class ToolRegistry {
 public:
-    // Throws std::invalid_argument on a duplicate name or an unparsable schema.
+    // Throws std::invalid_argument on a duplicate or non-portable name, or a schema
+    // that is not a JSON object with "type":"object".
     void add(ToolSpec spec);
+
+    // The subset every major model provider accepts as a function name.
+    static bool portable_name(std::string_view name) noexcept;
 
     const ToolSpec* find(std::string_view name) const noexcept;
     const std::vector<ToolSpec>& tools() const noexcept { return tools_; }

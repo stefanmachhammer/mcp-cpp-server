@@ -34,13 +34,26 @@ ToolResult ToolResult::image_png(const std::uint8_t* bytes, std::size_t len,
     return r;
 }
 
+bool ToolRegistry::portable_name(std::string_view name) noexcept {
+    if (name.empty() || name.size() > 64) return false;
+    for (char c : name) {
+        const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                        (c >= '0' && c <= '9') || c == '_' || c == '-';
+        if (!ok) return false;
+    }
+    return true;
+}
+
 void ToolRegistry::add(ToolSpec spec) {
-    if (spec.name.empty()) throw std::invalid_argument("tool needs a name");
+    if (!portable_name(spec.name))
+        throw std::invalid_argument("tool name must match [A-Za-z0-9_-]{1,64}: '" + spec.name + "'");
     if (find(spec.name)) throw std::invalid_argument("duplicate tool: " + spec.name);
     json::Document schema;
     std::string err;
     if (!json::parse(spec.input_schema, schema, &err) || !schema.IsObject())
         throw std::invalid_argument("bad input schema for " + spec.name + ": " + err);
+    if (json::get_string(schema, "type") != "object")
+        throw std::invalid_argument("input schema of " + spec.name + " must have \"type\":\"object\"");
     if (!spec.handler) throw std::invalid_argument("tool without handler: " + spec.name);
     tools_.push_back(std::move(spec));
     list_cache_.clear();

@@ -4,7 +4,9 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 namespace mcp {
 
@@ -15,6 +17,7 @@ struct HttpRequest {
     std::string path;
     std::string body;
     std::function<std::string(const char* name)> header;  // "" when absent
+    std::function<std::string(const char* name)> query;   // "" when absent
 };
 
 struct HttpResponse {
@@ -22,6 +25,12 @@ struct HttpResponse {
     std::string body;
     std::string content_type = "application/json";
     std::string allow;  // Allow header for 405
+
+    // Long-lived streaming body (text/event-stream). Called again and again with a
+    // writer until it returns false; on_close runs once the stream has ended.
+    using Writer = std::function<bool(std::string_view)>;
+    std::function<bool(const Writer& write)> stream;
+    std::function<void()>                    on_close;
 };
 
 using HttpHandler = std::function<HttpResponse(const HttpRequest&)>;
@@ -36,7 +45,8 @@ public:
     HttpTransport(const HttpTransport&)            = delete;
     HttpTransport& operator=(const HttpTransport&) = delete;
 
-    bool start(int port, const std::string& endpoint, HttpHandler handler, std::string* err);
+    bool start(int port, const std::vector<std::string>& paths, HttpHandler handler,
+               std::string* err);
     void stop();
 
     bool running() const noexcept { return running_.load(); }

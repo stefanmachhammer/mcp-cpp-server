@@ -2,7 +2,8 @@
 #if defined(_MSC_VER)
 #pragma warning(push, 0)
 #endif
-#define CPPHTTPLIB_THREAD_POOL_COUNT 4
+// Every open legacy SSE stream holds one worker for its whole lifetime.
+#define CPPHTTPLIB_THREAD_POOL_COUNT 16
 #include <httplib.h>
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -23,7 +24,7 @@ HttpTransport::HttpTransport() : impl_(std::make_unique<Impl>()) {}
 
 HttpTransport::~HttpTransport() { stop(); }
 
-bool HttpTransport::start(int port, const std::string& endpoint, HttpHandler handler,
+bool HttpTransport::start(int port, const std::vector<std::string>& paths, HttpHandler handler,
                           std::string* err) {
     if (running_) return true;
     impl_->handler = std::move(handler);
@@ -35,16 +36,35 @@ bool HttpTransport::start(int port, const std::string& endpoint, HttpHandler han
         hr.path   = req.path;
         hr.body   = req.body;
         hr.header = [&req](const char* name) { return req.get_header_value(name); };
+        hr.query  = [&req](const char* name) { return req.get_param_value(name); };
         HttpResponse out = impl_->handler(hr);
         res.status = out.status;
         if (!out.allow.empty()) res.set_header("Allow", out.allow);
+        if (out.stream) {
+            res.set_header("Cache-Control", "no-cache");
+            res.set_chunked_content_provider(
+                out.content_type,
+                [stream = std::move(out.stream)](std::size_t, httplib::DataSink& sink) {
+                    const HttpResponse::Writer write = [&sink](std::string_view s) {
+                        return sink.is_writable() && sink.write(s.data(), s.size());
+                    };
+                    if (!stream(write)) sink.done();
+                    return true;
+                },
+                [on_close = std::move(out.on_close)](bool) {
+                    if (on_close) on_close();
+                });
+            return;
+        }
         if (!out.body.empty()) res.set_content(out.body, out.content_type);
     };
-    svr.Post(endpoint, relay);
-    svr.Get(endpoint, relay);
-    svr.Delete(endpoint, relay);
-    svr.Put(endpoint, relay);
-    svr.Options(endpoint, relay);
+    for (const std::string& path : paths) {
+        svr.Post(path, relay);
+        svr.Get(path, relay);
+        svr.Delete(path, relay);
+        svr.Put(path, relay);
+        svr.Options(path, relay);
+    }
     svr.set_keep_alive_max_count(64);
     svr.set_read_timeout(30, 0);
     svr.set_payload_max_length(16u * 1024u * 1024u);

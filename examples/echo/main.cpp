@@ -48,6 +48,7 @@ int main(int argc, char** argv) {
 
     mcp::ServerConfig cfg;
     if (argc > 1) cfg.port = std::stoi(argv[1]);
+    if (argc > 2) cfg.token = argv[2];
     std::string err;
     if (!server.start(cfg, &err)) {
         std::fprintf(stderr, "start failed: %s\n", err.c_str());

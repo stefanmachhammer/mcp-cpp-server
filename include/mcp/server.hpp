@@ -15,14 +15,6 @@
 
 namespace mcp {
 
-struct ServerConfig {
-    int                       port = 7474;
-    std::string               endpoint = "/mcp";
-    std::string               token;  // empty: no authentication
-    std::chrono::milliseconds tool_timeout{10000};
-    std::chrono::milliseconds frame_budget{8};
-};
-
 // Owns the registry, the main-thread queue and the listener. Tools are
 // registered once before the first start(); pump() must run every frame.
 class McpServer {

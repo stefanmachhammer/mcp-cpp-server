@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 project(mcp-cpp-server VERSION 0.1.0 LANGUAGES CXX)
 
 option(MCP_BUILD_EXAMPLES "Build the example server" ${PROJECT_IS_TOP_LEVEL})
+option(MCP_BUILD_BRIDGE "Build the mcp-stdio-bridge executable" ${PROJECT_IS_TOP_LEVEL})
 option(MCP_FETCH_DEPS "Fetch RapidJSON and cpp-httplib when no targets are provided" ON)
 
 include(FetchContent)
@@ -37,10 +38,12 @@ if(NOT TARGET httplib::httplib)
 endif()
 
 add_library(mcp-cpp-server
+    src/client_config.cpp
     src/dispatcher.cpp
     src/http_transport.cpp
     src/protocol.cpp
     src/server.cpp
+    src/stdio_bridge.cpp
     src/tool_registry.cpp)
 add_library(mcp::server ALIAS mcp-cpp-server)
 
@@ -59,4 +62,9 @@ endif()
 if(MCP_BUILD_EXAMPLES)
     add_executable(mcp-echo examples/echo/main.cpp)
     target_link_libraries(mcp-echo PRIVATE mcp::server)
+endif()
+
+if(MCP_BUILD_BRIDGE)
+    add_executable(mcp-stdio-bridge tools/stdio_bridge/main.cpp)
+    target_link_libraries(mcp-stdio-bridge PRIVATE mcp::server)
 endif()

@@ -12,12 +12,11 @@ bool McpServer::start(const ServerConfig& cfg, std::string* err) {
     if (running()) return true;
     config_ = cfg;
     dispatcher_.reopen();
-    protocol_ = std::make_unique<Protocol>(tools_, dispatcher_, info_, cfg.tool_timeout);
-    protocol_->set_token(cfg.token);
+    protocol_ = std::make_unique<Protocol>(tools_, dispatcher_, info_, cfg);
     protocol_->on_log = [this](std::string line) { queue_log(std::move(line), false); };
 
     Protocol* proto = protocol_.get();
-    const bool ok = transport_.start(cfg.port, cfg.endpoint,
+    const bool ok = transport_.start(cfg.port, protocol_->paths(),
         [proto](const HttpRequest& req) -> HttpResponse {
             try {
                 return proto->handle(req);
@@ -45,14 +44,17 @@ bool McpServer::start(const ServerConfig& cfg, std::string* err) {
         protocol_.reset();
         return false;
     }
-    queue_log("listening on http://127.0.0.1:" + std::to_string(cfg.port) + cfg.endpoint +
-              (cfg.token.empty() ? " (no token)" : " (bearer token required)"), false);
+    const std::string base = "http://127.0.0.1:" + std::to_string(cfg.port);
+    queue_log("listening on " + base + cfg.endpoint +
+              (cfg.legacy_sse ? " (legacy SSE: " + base + cfg.sse_endpoint + ")" : std::string()) +
+              (cfg.token.empty() ? ", no token" : ", bearer token required"), false);
     return true;
 }
 
 void McpServer::stop() {
     if (!running() && !protocol_) return;
     dispatcher_.shutdown();  // releases request threads blocked on futures
+    if (protocol_) protocol_->shutdown();  // ends open event streams
     transport_.stop();
     protocol_.reset();
     queue_log("stopped", false);
